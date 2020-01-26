@@ -40,7 +40,7 @@ CFLAGS = $(OPT) -Wall -Wmissing-prototypes \
 	-DMOUNT_TYPE=$(MOUNT_TYPE)
 
 LDFLAGS = -static
-LIBS = -lreadline -lz - lcurl
+LIBS = -lreadline -lz -lcurl
 INDENT= indent
 INDENTFLAGS= --gnu-style 
 ASTYLE= astyle
