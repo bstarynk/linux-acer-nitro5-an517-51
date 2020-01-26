@@ -11,110 +11,110 @@
 #include "sash.h"
 
 
-static	BOOL	search
-	(const char * string, const char * word, BOOL ignoreCase);
+static BOOL search (const char *string, const char *word, BOOL ignoreCase);
 
 
 int
-do_grep(int argc, const char ** argv)
+do_grep (int argc, const char **argv)
 {
-	FILE *		fp;
-	const char *	word;
-	const char *	name;
-	const char *	cp;
-	BOOL		tellName;
-	BOOL		ignoreCase;
-	BOOL		tellLine;
-	long		line;
-	char		buf[BUF_SIZE];
-	int		r;
+  FILE *fp;
+  const char *word;
+  const char *name;
+  const char *cp;
+  BOOL tellName;
+  BOOL ignoreCase;
+  BOOL tellLine;
+  long line;
+  char buf[BUF_SIZE];
+  int r;
 
-	r = 1;
-	ignoreCase = FALSE;
-	tellLine = FALSE;
+  r = 1;
+  ignoreCase = FALSE;
+  tellLine = FALSE;
 
-	argc--;
-	argv++;
+  argc--;
+  argv++;
 
-	if (**argv == '-')
+  if (**argv == '-')
+    {
+      argc--;
+      cp = *argv++;
+
+      while (*++cp)
+	switch (*cp)
+	  {
+	  case 'i':
+	    ignoreCase = TRUE;
+	    break;
+
+	  case 'n':
+	    tellLine = TRUE;
+	    break;
+
+	  default:
+	    fprintf (stderr, "Unknown option\n");
+
+	    return 1;
+	  }
+    }
+
+  word = *argv++;
+  argc--;
+
+  tellName = (argc > 1);
+
+  while (argc-- > 0)
+    {
+      name = *argv++;
+
+      fp = fopen (name, "r");
+
+      if (fp == NULL)
 	{
-		argc--;
-		cp = *argv++;
+	  perror (name);
+	  r = 1;
 
-		while (*++cp) switch (*cp)
-		{
-			case 'i':
-				ignoreCase = TRUE;
-				break;
-
-			case 'n':
-				tellLine = TRUE;
-				break;
-
-			default:
-				fprintf(stderr, "Unknown option\n");
-
-				return 1;
-		}
+	  continue;
 	}
 
-	word = *argv++;
-	argc--;
+      line = 0;
 
-	tellName = (argc > 1);
-
-	while (argc-- > 0)
+      while (fgets (buf, sizeof (buf), fp))
 	{
-		name = *argv++;
+	  if (intFlag)
+	    {
+	      fclose (fp);
 
-		fp = fopen(name, "r");
+	      return 1;
+	    }
 
-		if (fp == NULL)
-		{
-			perror(name);
-			r = 1;
+	  line++;
 
-			continue;
-		}
+	  cp = &buf[strlen (buf) - 1];
 
-		line = 0;
+	  if (*cp != '\n')
+	    fprintf (stderr, "%s: Line too long\n", name);
 
-		while (fgets(buf, sizeof(buf), fp))
-		{
-			if (intFlag)
-			{
-				fclose(fp);
+	  if (search (buf, word, ignoreCase))
+	    {
+	      r = 0;
+	      if (tellName)
+		printf ("%s: ", name);
 
-				return 1;
-			}
+	      if (tellLine)
+		printf ("%ld: ", line);
 
-			line++;
-
-			cp = &buf[strlen(buf) - 1];
-
-			if (*cp != '\n')
-				fprintf(stderr, "%s: Line too long\n", name);
-
-			if (search(buf, word, ignoreCase))
-			{
-				r = 0;
-				if (tellName)
-					printf("%s: ", name);
-
-				if (tellLine)
-					printf("%ld: ", line);
-
-				fputs(buf, stdout);
-			}
-		}
-
-		if (ferror(fp))
-			perror(name);
-
-		fclose(fp);
+	      fputs (buf, stdout);
+	    }
 	}
 
-	return r;
+      if (ferror (fp))
+	perror (name);
+
+      fclose (fp);
+    }
+
+  return r;
 }
 
 
@@ -122,76 +122,76 @@ do_grep(int argc, const char ** argv)
  * See if the specified word is found in the specified string.
  */
 static BOOL
-search(const char * string, const char * word, BOOL ignoreCase)
+search (const char *string, const char *word, BOOL ignoreCase)
 {
-	const char *	cp1;
-	const char *	cp2;
-	int		len;
-	int		lowFirst;
-	int		ch1;
-	int		ch2;
+  const char *cp1;
+  const char *cp2;
+  int len;
+  int lowFirst;
+  int ch1;
+  int ch2;
 
-	len = strlen(word);
+  len = strlen (word);
 
-	if (!ignoreCase)
+  if (!ignoreCase)
+    {
+      while (TRUE)
 	{
-		while (TRUE)
-		{
-			string = strchr(string, word[0]);
+	  string = strchr (string, word[0]);
 
-			if (string == NULL)
-				return FALSE;
+	  if (string == NULL)
+	    return FALSE;
 
-			if (memcmp(string, word, len) == 0)
-				return TRUE;
+	  if (memcmp (string, word, len) == 0)
+	    return TRUE;
 
-			string++;
-		}
+	  string++;
+	}
+    }
+
+  /*
+   * Here if we need to check case independence.
+   * Do the search by lower casing both strings.
+   */
+  lowFirst = *word;
+
+  if (isupper (lowFirst))
+    lowFirst = tolower (lowFirst);
+
+  while (TRUE)
+    {
+      while (*string && (*string != lowFirst) &&
+	     (!isupper (*string) || (tolower (*string) != lowFirst)))
+	{
+	  string++;
 	}
 
-	/*
-	 * Here if we need to check case independence.
-	 * Do the search by lower casing both strings.
-	 */
-	lowFirst = *word;
+      if (*string == '\0')
+	return FALSE;
 
-	if (isupper(lowFirst))
-		lowFirst = tolower(lowFirst);
+      cp1 = string;
+      cp2 = word;
 
-	while (TRUE)
+      do
 	{
-		while (*string && (*string != lowFirst) &&
-			(!isupper(*string) || (tolower(*string) != lowFirst)))
-		{
-			string++;
-		}
+	  if (*cp2 == '\0')
+	    return TRUE;
 
-		if (*string == '\0')
-			return FALSE;
+	  ch1 = *cp1++;
 
-		cp1 = string;
-		cp2 = word;
+	  if (isupper (ch1))
+	    ch1 = tolower (ch1);
 
-		do
-		{
-			if (*cp2 == '\0')
-				return TRUE;
+	  ch2 = *cp2++;
 
-			ch1 = *cp1++;
+	  if (isupper (ch2))
+	    ch2 = tolower (ch2);
 
-			if (isupper(ch1))
-				ch1 = tolower(ch1);
-
-			ch2 = *cp2++;
-
-			if (isupper(ch2))
-				ch2 = tolower(ch2);
-
-		}
-		while (ch1 == ch2);
-
-		string++;
 	}
+      while (ch1 == ch2);
+
+      string++;
+    }
 }
 
 /* END CODE */

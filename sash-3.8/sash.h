@@ -55,6 +55,8 @@ typedef	int	BOOL;
 #define	TRUE	((BOOL) 1)
 
 
+double sash_time(clockid_t);
+
 /*
  * Built-in command functions.
  */
@@ -102,6 +104,7 @@ extern	int	do_where(int argc, const char ** argv);
 
 /// in cmd_basile.cpp
 extern  int     do_curl(int argc, const char**argv);
+extern  char*   basile_prompt(void);
 
 #if	HAVE_GZIP
 extern	int	do_gzip(int argc, const char ** argv);

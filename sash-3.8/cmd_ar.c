@@ -32,229 +32,231 @@
  */
 typedef struct
 {
-	int	fd;		/* file reading archive from */
-	BOOL	eof;		/* end of file has been seen */
-	BOOL	rescan;		/* rescan the header just read */
-	char *	nameTable;	/* long name table */
+  int fd;			/* file reading archive from */
+  BOOL eof;			/* end of file has been seen */
+  BOOL rescan;			/* rescan the header just read */
+  char *nameTable;		/* long name table */
 
-	/*
-	 * Information about the current file read from the archive.
-	 * This is extracted from the latest member header read.
-	 */
-	char *	name;		/* current file name */
-	time_t	date;		/* date of file */
-	uid_t	uid;		/* user id */
-	gid_t	gid;		/* group id */
-	mode_t	mode;		/* file protection */
-	off_t	size;		/* file size */
-	int	pad;		/* padding to next header */
+  /*
+   * Information about the current file read from the archive.
+   * This is extracted from the latest member header read.
+   */
+  char *name;			/* current file name */
+  time_t date;			/* date of file */
+  uid_t uid;			/* user id */
+  gid_t gid;			/* group id */
+  mode_t mode;			/* file protection */
+  off_t size;			/* file size */
+  int pad;			/* padding to next header */
 } Archive;
 
 
 /*
  * Local procedures.
  */
-static	void	initArchive(Archive * arch);
-static	BOOL	openArchive(const char * name, Archive * arch);
-static	void	closeArchive(Archive * arch);
-static	BOOL	readSpecialMember(Archive * arch);
-static	BOOL	readNormalMember(Archive * arch);
-static	BOOL	readMember(Archive * arch, struct ar_hdr * hdr);
-static	BOOL	skipMember(const Archive * arch);
-static	BOOL	skipPadding(int fd, int pad);
-static	BOOL	writeFile(const Archive * arch, int outfd);
-static	int	createFile(const Archive * arch);
-static	BOOL	canonicalize(Archive * arch, const struct ar_hdr * hdr);
-static	void	listMember(const Archive * arch);
-static	int	shortNameMatches44BSD(const char * name);
-static	int	shortNameMatchesSysV(const char * name);
+static void initArchive (Archive * arch);
+static BOOL openArchive (const char *name, Archive * arch);
+static void closeArchive (Archive * arch);
+static BOOL readSpecialMember (Archive * arch);
+static BOOL readNormalMember (Archive * arch);
+static BOOL readMember (Archive * arch, struct ar_hdr *hdr);
+static BOOL skipMember (const Archive * arch);
+static BOOL skipPadding (int fd, int pad);
+static BOOL writeFile (const Archive * arch, int outfd);
+static int createFile (const Archive * arch);
+static BOOL canonicalize (Archive * arch, const struct ar_hdr *hdr);
+static void listMember (const Archive * arch);
+static int shortNameMatches44BSD (const char *name);
+static int shortNameMatchesSysV (const char *name);
 
-static	BOOL	wantMember(const Archive * arch, int n_names,
-			const char ** names);
+static BOOL wantMember (const Archive * arch, int n_names,
+			const char **names);
 
-static BOOL	getNumber(const char * s, unsigned base, int max_digits,
-			unsigned long * ul);
+static BOOL getNumber (const char *s, unsigned base, int max_digits,
+		       unsigned long *ul);
 
 
 int
-do_ar(int argc, const char ** argv)
+do_ar (int argc, const char **argv)
 {
-	const char *	options;
-	const char *	archiveName;
-	BOOL		doExtract;
-	BOOL		doTable;
-	BOOL		doPrint;
-	BOOL		verbose;
-	int		r;
-	Archive		arch;
+  const char *options;
+  const char *archiveName;
+  BOOL doExtract;
+  BOOL doTable;
+  BOOL doPrint;
+  BOOL verbose;
+  int r;
+  Archive arch;
 
-	r = 0;
-	verbose = FALSE;
-	doExtract = FALSE;
-	doTable = FALSE;
-	doPrint = FALSE;
+  r = 0;
+  verbose = FALSE;
+  doExtract = FALSE;
+  doTable = FALSE;
+  doPrint = FALSE;
 
-	if (argc < 3)
+  if (argc < 3)
+    {
+      fprintf (stderr, "Too few arguments for ar\n");
+
+      return 1;
+    }
+
+  /*
+   * Get the option string and archive file name.
+   */
+  options = argv[1];
+  archiveName = argv[2];
+
+  /*
+   * Advance the arguments to the list of file names (if any).
+   */
+  argc -= 3;
+  argv += 3;
+
+  /*
+   * Parse the option characters.
+   */
+  for (; *options; options++)
+    {
+      switch (*options)
 	{
-		fprintf(stderr, "Too few arguments for ar\n");
+	case 't':
+	  doTable = TRUE;
+	  break;
 
-		return 1;
+	case 'x':
+	  doExtract = TRUE;
+	  break;
+
+	case 'p':
+	  doPrint = TRUE;
+	  break;
+
+	case 'v':
+	  verbose = TRUE;
+	  break;
+
+	case 'd':
+	case 'm':
+	case 'q':
+	case 'r':
+	  fprintf (stderr, "Writing ar files is not supported\n");
+
+	  return 1;
+
+	default:
+	  fprintf (stderr, "Unknown ar flag: %c\n", *options);
+
+	  return 1;
+	}
+    }
+
+  if (doExtract + doTable + doPrint != 1)
+    {
+      fprintf (stderr, "Exactly one of 'x', 'p' or 't' must be specified\n");
+
+      return 1;
+    }
+
+  /*
+   * Open the archive file.
+   */
+  initArchive (&arch);
+
+  if (!openArchive (archiveName, &arch))
+    return 1;
+
+  /*
+   * Read the first special member of the archive.
+   */
+  if (!readSpecialMember (&arch))
+    return 1;
+
+  /*
+   * Read all of the normal members of the archive.
+   */
+  while (readNormalMember (&arch))
+    {
+      /*
+       * If this file is not wanted then skip it.
+       */
+      if (!wantMember (&arch, argc, argv))
+	{
+	  if (!skipMember (&arch))
+	    break;
+
+	  continue;
 	}
 
-	/*
-	 * Get the option string and archive file name.
-	 */
-	options = argv[1];
-	archiveName = argv[2];
-
-	/*
-	 * Advance the arguments to the list of file names (if any).
-	 */
-	argc -= 3;
-	argv += 3;
-
-	/*
-	 * Parse the option characters.
-	 */
-	for (; *options; options++)
+      /*
+       * This file is wanted.
+       */
+      if (doTable)
 	{
-		switch (*options)
-		{
-		case 't':
-			doTable = TRUE;
-			break;
+	  if (verbose)
+	    listMember (&arch);
+	  else
+	    puts (arch.name);
 
-		case 'x':
-			doExtract = TRUE;
-			break;
-
-		case 'p':
-			doPrint = TRUE;
-			break;
-
-		case 'v':
-			verbose = TRUE;
-			break;
-
-		case 'd': case 'm': case 'q': case 'r':
-			fprintf(stderr, "Writing ar files is not supported\n");
-
-			return 1;
-
-		default:
-			fprintf(stderr, "Unknown ar flag: %c\n", *options);
-
-			return 1;
-		}
+	  if (!skipMember (&arch))
+	    break;
 	}
-
-	if (doExtract + doTable + doPrint != 1)
+      else if (doPrint)
 	{
-		fprintf(stderr,
-			"Exactly one of 'x', 'p' or 't' must be specified\n");
+	  if (verbose)
+	    {
+	      /*
+	       * The verbose format makes me gag,
+	       * but 4.4BSD, GNU and even V7 all
+	       * have the same lossage.
+	       */
+	      printf ("\n<%s>\n\n", arch.name);
+	      fflush (stdout);
+	    }
 
-		return 1;
+	  if (!writeFile (&arch, STDOUT))
+	    break;
 	}
-
-	/*
-	 * Open the archive file.
-	 */
-	initArchive(&arch);
-
-	if (!openArchive(archiveName, &arch))
-		return 1;
-
-	/*
-	 * Read the first special member of the archive.
-	 */
-	if (!readSpecialMember(&arch))
-		return 1;
-
-	/*
-	 * Read all of the normal members of the archive.
-	 */
-	while (readNormalMember(&arch))
+      else if (doExtract)
 	{
-		/*
-		 * If this file is not wanted then skip it.
-		 */
-		if (!wantMember(&arch, argc, argv))
-		{
-			if (!skipMember(&arch))
-				break;
+	  int outfd;
+	  BOOL success;
 
-			continue;
-		}
+	  if (verbose)
+	    printf ("x - %s\n", arch.name);
 
-		/*
-		 * This file is wanted.
-		 */
-		if (doTable)
-		{
-			if (verbose)
-				listMember(&arch);
-			else
-				puts(arch.name);
+	  outfd = createFile (&arch);
 
-			if (!skipMember(&arch))
-				break;
-		}
-		else if (doPrint)
-		{
-			if (verbose)
-			{
-				/*
-				 * The verbose format makes me gag,
-				 * but 4.4BSD, GNU and even V7 all
-				 * have the same lossage.
-				 */
-				printf("\n<%s>\n\n", arch.name);
-				fflush(stdout);
-			}
+	  if (outfd == -1)
+	    break;
 
-			if (!writeFile(&arch, STDOUT))
-				break;
-		}
-		else if (doExtract)
-		{
-			int	outfd;
-			BOOL	success;
+	  success = writeFile (&arch, outfd);
 
-			if (verbose)
-				printf("x - %s\n", arch.name);
+	  if (close (outfd) == -1)
+	    {
+	      fprintf (stderr, "Can't close %s: %s\n",
+		       arch.name, strerror (errno));
 
-			outfd = createFile(&arch);
+	      break;
+	    }
 
-			if (outfd == -1)
-				break;
-
-			success = writeFile(&arch, outfd);
-
-			if (close(outfd) == -1)
-			{
-				fprintf(stderr, "Can't close %s: %s\n",
-					arch.name, strerror(errno));
-
-				break;
-			}
-
-			if (!success)
-			{
-				r = 1;
-				break;
-			}
-		}
-		else
-		{
-			fprintf(stderr, "Oops -- I don't know what to do\n");
-			r = 1;
-			break;
-		}
+	  if (!success)
+	    {
+	      r = 1;
+	      break;
+	    }
 	}
+      else
+	{
+	  fprintf (stderr, "Oops -- I don't know what to do\n");
+	  r = 1;
+	  break;
+	}
+    }
 
-	closeArchive(&arch);
+  closeArchive (&arch);
 
-	return r;
+  return r;
 }
 
 
@@ -264,29 +266,29 @@ do_ar(int argc, const char ** argv)
  * of the opened file, or -1 on an error.
  */
 static int
-createFile(const Archive * arch)
+createFile (const Archive * arch)
 {
-	int	fd;
+  int fd;
 
-	fd = open(arch->name, O_WRONLY | O_CREAT | O_TRUNC, arch->mode);
+  fd = open (arch->name, O_WRONLY | O_CREAT | O_TRUNC, arch->mode);
 
-	if (fd == -1)
-	{
-		fprintf(stderr, "Can't create \"%s\": %s\n",
-			arch->name, strerror(errno));
+  if (fd == -1)
+    {
+      fprintf (stderr, "Can't create \"%s\": %s\n",
+	       arch->name, strerror (errno));
 
-		return -1;
-	}
+      return -1;
+    }
 
-	/*
-	 * Don't worry if these fail.  We have to do the fchmod() despite
-	 * specifying the mode in the open() call, because that mode is
-	 * munged by the umask.
-	 */
-	checkStatus("fchmod", fchmod(fd, arch->mode));
-	checkStatus("fchown", fchown(fd, arch->uid, arch->gid));
+  /*
+   * Don't worry if these fail.  We have to do the fchmod() despite
+   * specifying the mode in the open() call, because that mode is
+   * munged by the umask.
+   */
+  checkStatus ("fchmod", fchmod (fd, arch->mode));
+  checkStatus ("fchown", fchown (fd, arch->uid, arch->gid));
 
-	return fd;
+  return fd;
 }
 
 
@@ -296,26 +298,26 @@ createFile(const Archive * arch)
  * file names, or else that the specified list of file names is empty.
  */
 static BOOL
-wantMember(const Archive * arch, int n_names, const char ** name)
+wantMember (const Archive * arch, int n_names, const char **name)
 {
-	int	i;
+  int i;
 
-	/*
-	 * If there are no names then all archive members are wanted.
-	 */
-	if (n_names == 0)
-		return TRUE;
+  /*
+   * If there are no names then all archive members are wanted.
+   */
+  if (n_names == 0)
+    return TRUE;
 
-	/*
-	 * See if the member file name is contained in the list.
-	 */
-	for (i = 0; i < n_names; i++)
-	{
-		if (strcmp(arch->name, name[i]) == 0)
-			return TRUE;
-	}
+  /*
+   * See if the member file name is contained in the list.
+   */
+  for (i = 0; i < n_names; i++)
+    {
+      if (strcmp (arch->name, name[i]) == 0)
+	return TRUE;
+    }
 
-	return FALSE;
+  return FALSE;
 }
 
 
@@ -326,51 +328,51 @@ wantMember(const Archive * arch, int n_names, const char ** name)
  * Only non-negatives numbers are parsed.  Returns TRUE on success.
  */
 static BOOL
-getNumber(const char * s, unsigned base, int max_digits, unsigned long * ul)
+getNumber (const char *s, unsigned base, int max_digits, unsigned long *ul)
 {
-	const char *	p;
-	const char *	endp;
-	unsigned long	cutoff;
-	unsigned long	cutlim;
+  const char *p;
+  const char *endp;
+  unsigned long cutoff;
+  unsigned long cutlim;
 
-	if (base < 2 || base > 10  ||  s == 0 || *s == 0  ||  ul == 0)
-		return FALSE;
+  if (base < 2 || base > 10 || s == 0 || *s == 0 || ul == 0)
+    return FALSE;
 
-	cutoff = ULONG_MAX / (unsigned long) base;
-	cutlim = ULONG_MAX % (unsigned long) base;
-	*ul = 0;
+  cutoff = ULONG_MAX / (unsigned long) base;
+  cutlim = ULONG_MAX % (unsigned long) base;
+  *ul = 0;
 
-	endp = (max_digits >= 0) ? s + max_digits : 0;
+  endp = (max_digits >= 0) ? s + max_digits : 0;
 
-	for (p = s;  endp ? p < endp : 1;  p++)
-	{
-		unsigned d;
+  for (p = s; endp ? p < endp : 1; p++)
+    {
+      unsigned d;
 
-		if (*p == 0 || *p == ' ')
-			break;	/* end of string */
+      if (*p == 0 || *p == ' ')
+	break;			/* end of string */
 
-		if (!isDecimal(*p))
-			return FALSE; /* non-digit */
+      if (!isDecimal (*p))
+	return FALSE;		/* non-digit */
 
-		d = *p - '0';
+      d = *p - '0';
 
-		if (d >= base)
-			return FALSE; /* digit outside range for base */
+      if (d >= base)
+	return FALSE;		/* digit outside range for base */
 
-		if (*ul > cutoff || (*ul == cutoff && d > cutlim))
-			return FALSE; /* overflow */
+      if (*ul > cutoff || (*ul == cutoff && d > cutlim))
+	return FALSE;		/* overflow */
 
-		*ul *= base;
-		*ul += d;
-	}
+      *ul *= base;
+      *ul += d;
+    }
 
-	if (p == s)
-		return FALSE;	/* nothing was converted */
+  if (p == s)
+    return FALSE;		/* nothing was converted */
 
-	if (*p && *p != ' ')
-		return FALSE;	/* trailing garbage */
+  if (*p && *p != ' ')
+    return FALSE;		/* trailing garbage */
 
-	return TRUE;
+  return TRUE;
 }
 
 
@@ -378,13 +380,13 @@ getNumber(const char * s, unsigned base, int max_digits, unsigned long * ul)
  * Initialise the specified Archive structure for use.
  */
 static void
-initArchive(Archive * arch)
+initArchive (Archive * arch)
 {
-	arch->fd = -1;
-	arch->name = 0;
-	arch->nameTable = 0;
-	arch->eof = FALSE;
-	arch->rescan = FALSE;
+  arch->fd = -1;
+  arch->name = 0;
+  arch->nameTable = 0;
+  arch->eof = FALSE;
+  arch->rescan = FALSE;
 }
 
 
@@ -394,56 +396,56 @@ initArchive(Archive * arch)
  * Returns TRUE on success.
  */
 static BOOL
-openArchive(const char * name, Archive * arch)
+openArchive (const char *name, Archive * arch)
 {
-	unsigned char	buf[SARMAG];
-	ssize_t		cc;
+  unsigned char buf[SARMAG];
+  ssize_t cc;
 
-	arch->fd = open(name, O_RDONLY);
+  arch->fd = open (name, O_RDONLY);
 
-	if (arch->fd == -1)
-	{
-		fprintf(stderr, "Can't open archive file %s: %s\n",
-			name, strerror(errno));
+  if (arch->fd == -1)
+    {
+      fprintf (stderr, "Can't open archive file %s: %s\n",
+	       name, strerror (errno));
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	cc = read(arch->fd, buf, SARMAG);
+  cc = read (arch->fd, buf, SARMAG);
 
-	if (cc == -1)
-	{
-		fprintf(stderr, "Error reading archive header: %s\n",
-			strerror(errno));
+  if (cc == -1)
+    {
+      fprintf (stderr, "Error reading archive header: %s\n",
+	       strerror (errno));
 
-		goto close_and_out;
-	} 
+      goto close_and_out;
+    }
 
-	if (cc != SARMAG)
-	{
-		fprintf(stderr, "Short read of archive header\n");
+  if (cc != SARMAG)
+    {
+      fprintf (stderr, "Short read of archive header\n");
 
-		goto close_and_out;
-	}
+      goto close_and_out;
+    }
 
-	if (memcmp(buf, ARMAG, SARMAG))
-	{
-		fprintf(stderr, "Invalid archive header\n");
+  if (memcmp (buf, ARMAG, SARMAG))
+    {
+      fprintf (stderr, "Invalid archive header\n");
 
-		goto close_and_out;
-	}
+      goto close_and_out;
+    }
 
-	return TRUE;
+  return TRUE;
 
 
-	/*
-	 * Here on an error to clean up.
-	 */
+  /*
+   * Here on an error to clean up.
+   */
 close_and_out:
-	(void) close(arch->fd);
-	arch->fd = -1;
+  (void) close (arch->fd);
+  arch->fd = -1;
 
-	return FALSE;
+  return FALSE;
 }
 
 
@@ -451,18 +453,18 @@ close_and_out:
  * Close the archive file.
  */
 static void
-closeArchive(Archive * arch)
+closeArchive (Archive * arch)
 {
-	free(arch->name);
-	arch->name = 0;
+  free (arch->name);
+  arch->name = 0;
 
-	free(arch->nameTable);
-	arch->nameTable = 0;
+  free (arch->nameTable);
+  arch->nameTable = 0;
 
-	if (arch->fd >= 0)
-		(void) close(arch->fd);
+  if (arch->fd >= 0)
+    (void) close (arch->fd);
 
-	arch->fd = -1;
+  arch->fd = -1;
 }
 
 
@@ -472,42 +474,41 @@ closeArchive(Archive * arch)
  * the end of file had been reached.
  */
 static BOOL
-readMember(Archive * arch, struct ar_hdr * hdr)
+readMember (Archive * arch, struct ar_hdr *hdr)
 {
-	ssize_t	cc;
+  ssize_t cc;
 
-	cc = read(arch->fd, hdr, sizeof(*hdr));
+  cc = read (arch->fd, hdr, sizeof (*hdr));
 
-	if (cc < 0)
-	{
-		fprintf(stderr, "Error reading member header: %s\n",
-			strerror(errno));
+  if (cc < 0)
+    {
+      fprintf (stderr, "Error reading member header: %s\n", strerror (errno));
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	if (cc == 0)
-	{
-		arch->eof = TRUE;
+  if (cc == 0)
+    {
+      arch->eof = TRUE;
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	if (cc != sizeof(*hdr))
-	{
-		fprintf(stderr, "Short read of member header\n");
+  if (cc != sizeof (*hdr))
+    {
+      fprintf (stderr, "Short read of member header\n");
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	if (memcmp(hdr->ar_fmag, ARFMAG, sizeof(hdr->ar_fmag)))
-	{
-		fprintf(stderr, "Invalid member header\n");
+  if (memcmp (hdr->ar_fmag, ARFMAG, sizeof (hdr->ar_fmag)))
+    {
+      fprintf (stderr, "Invalid member header\n");
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	return TRUE;
+  return TRUE;
 }
 
 
@@ -517,36 +518,36 @@ readMember(Archive * arch, struct ar_hdr * hdr)
  * of the actual long file name.  Returns -1 on an error.
  */
 static int
-shortNameMatches44BSD(const char * name)
+shortNameMatches44BSD (const char *name)
 {
-	const char *	p;
-	unsigned long	ul;
+  const char *p;
+  unsigned long ul;
 
-	if (strncmp(name, "#1/", 3) != 0)
-		return -1;
+  if (strncmp (name, "#1/", 3) != 0)
+    return -1;
 
-	if (!isDecimal(name[3]))
-		return -1;
+  if (!isDecimal (name[3]))
+    return -1;
 
-	for (p = name + 4;  *p;  p++)
-	{
-		if (!isDecimal(*p))
-			break;
-	}
+  for (p = name + 4; *p; p++)
+    {
+      if (!isDecimal (*p))
+	break;
+    }
 
-	while (*p)
-	{
-		if (*p++ != ' ')
-			return -1;
-	}
+  while (*p)
+    {
+      if (*p++ != ' ')
+	return -1;
+    }
 
-	if (!getNumber(name + 3, 10, -1, &ul))
-		return -1;
+  if (!getNumber (name + 3, 10, -1, &ul))
+    return -1;
 
-	if (ul == 0)		/* broken archive */
-		return -1;
+  if (ul == 0)			/* broken archive */
+    return -1;
 
-	return ul;
+  return ul;
 }
 
 
@@ -556,34 +557,34 @@ shortNameMatches44BSD(const char * name)
  * actual long file name.  Returns -1 on an error.
  */
 static int
-shortNameMatchesSysV(const char * name)
+shortNameMatchesSysV (const char *name)
 {
-	const char *	p;
-	unsigned long	ul;
+  const char *p;
+  unsigned long ul;
 
-	/* "^/(\d+) *$" */
-	if (name[0] != '/')
-		return -1;
+  /* "^/(\d+) *$" */
+  if (name[0] != '/')
+    return -1;
 
-	if (!isDecimal(name[1]))
-		return -1;
+  if (!isDecimal (name[1]))
+    return -1;
 
-	for (p = name + 2;  *p;  p++)
-	{
-		if (!isDecimal(*p))
-			break;
-	}
+  for (p = name + 2; *p; p++)
+    {
+      if (!isDecimal (*p))
+	break;
+    }
 
-	while (*p)
-	{
-		if (*p++ != ' ')
-			return -1;
-	}
+  while (*p)
+    {
+      if (*p++ != ' ')
+	return -1;
+    }
 
-	if (!getNumber(name + 1, 10, -1, &ul))
-		return -1;
+  if (!getNumber (name + 1, 10, -1, &ul))
+    return -1;
 
-	return ul;
+  return ul;
 }
 
 
@@ -606,129 +607,128 @@ shortNameMatchesSysV(const char * name)
  * archive file to obtain a long file name.  Returns TRUE on success.
  */
 static BOOL
-canonicalize(Archive * arch, const struct ar_hdr * hdr)
+canonicalize (Archive * arch, const struct ar_hdr *hdr)
 {
-	char		buf[sizeof(hdr->ar_name) + 1];
-	int		n;
-	unsigned long	ul;
-	unsigned long	bsd_len;
+  char buf[sizeof (hdr->ar_name) + 1];
+  int n;
+  unsigned long ul;
+  unsigned long bsd_len;
 
-	bsd_len = 0;
+  bsd_len = 0;
 
-	free(arch->name);
-	arch->name = 0;
+  free (arch->name);
+  arch->name = 0;
 
-	strncpy(buf, hdr->ar_name, sizeof(hdr->ar_name));
-	buf[sizeof(hdr->ar_name)] = 0;
+  strncpy (buf, hdr->ar_name, sizeof (hdr->ar_name));
+  buf[sizeof (hdr->ar_name)] = 0;
 
-	/*
-	 * 1. If shortname matches "^#1/(\d+) *$", then it's a 4.4BSD
-	 *    longname.  Read a longname of $1 bytes from ARCH->fd, or
-	 *    return FALSE if impossible.
-	 */
-	if ((n = shortNameMatches44BSD(buf)) != -1)
+  /*
+   * 1. If shortname matches "^#1/(\d+) *$", then it's a 4.4BSD
+   *    longname.  Read a longname of $1 bytes from ARCH->fd, or
+   *    return FALSE if impossible.
+   */
+  if ((n = shortNameMatches44BSD (buf)) != -1)
+    {
+      /* N is the length of the longname */
+      ssize_t cc;
+
+      bsd_len = n;
+
+      MEMB_NAME_ALLOC (n + 1);
+
+      cc = read (arch->fd, arch->name, n);
+
+      if (cc == -1)
 	{
-		/* N is the length of the longname */
-		ssize_t cc;
+	  fprintf (stderr, "Error reading longname: %s\n", strerror (errno));
 
-		bsd_len = n;
-
-		MEMB_NAME_ALLOC(n + 1);
-
-		cc = read(arch->fd, arch->name, n);
-
-		if (cc == -1)
-		{
-			fprintf(stderr, "Error reading longname: %s\n",
-				strerror(errno));
-
-			goto free_and_out;
-		}
-
-		if (cc != n)
-		{
-			fprintf(stderr, "Unexpected end of file in longname\n");
-
-			goto free_and_out;
-		}
-
-		arch->name[n] = 0;
+	  goto free_and_out;
 	}
 
-	/*
-	 * 2. Otherwise, if shortname matches "^/(\d+) *$", then it's a SysV
-	 *    longname.  Get the longname from the nameTable, or return FALSE
-	 *    if there is none.
-	 */
-	else if ((n = shortNameMatchesSysV(buf)) != -1)
+      if (cc != n)
 	{
-		/*
-		 * N is the index of the longname
-		 */
-		const char *	longname;
-		const char *	p;
-		size_t		len;
+	  fprintf (stderr, "Unexpected end of file in longname\n");
 
-		if (n >= strlen(arch->nameTable))
-		{
-			fprintf(stderr, "Longname index too large\n");
-
-			return FALSE;
-		}
-
-		longname = arch->nameTable + n;
-
-		p = strchr(longname, '/');
-
-		if (!p)
-		{
-			fprintf(stderr, "Bad longname index\n");
-
-			return FALSE;
-		}
-
-		if (p[1] != '\n')
-		{
-			fprintf(stderr, "Malformed longname table\n");
-
-			return FALSE;
-		}
-
-		len = p - longname;
-		MEMB_NAME_ALLOC(len + 1);
-		strncpy(arch->name, longname, len);
-		arch->name[len] = '\0';
+	  goto free_and_out;
 	}
 
-	/*
-	 * 3. Otherwise, it's just a shortname.  If the shortname contains a
-	 *    slash, then the name terminates before the slash; otherwise,
-	 *    the name terminates at the first space, or at the end of the
-	 *    field if there is none. */
-	else
+      arch->name[n] = 0;
+    }
+
+  /*
+   * 2. Otherwise, if shortname matches "^/(\d+) *$", then it's a SysV
+   *    longname.  Get the longname from the nameTable, or return FALSE
+   *    if there is none.
+   */
+  else if ((n = shortNameMatchesSysV (buf)) != -1)
+    {
+      /*
+       * N is the index of the longname
+       */
+      const char *longname;
+      const char *p;
+      size_t len;
+
+      if (n >= strlen (arch->nameTable))
 	{
-		const char *	p;
-		size_t		len;
+	  fprintf (stderr, "Longname index too large\n");
 
-		p = strchr(buf, '/');
-
-		if (!p)
-			p = strchr(buf, ' ');
-
-		if (p)
-			len = p - buf;
-		else
-			len = sizeof(hdr->ar_name);
-
-		MEMB_NAME_ALLOC(len + 1);
-		strncpy(arch->name, buf, len);
-		arch->name[len] = 0;
+	  return FALSE;
 	}
 
-	/*
-	 * 4. Parse the remaining fields of the header.  Return FALSE if any
-	 *    are missing or ill-formed.
-	 */
+      longname = arch->nameTable + n;
+
+      p = strchr (longname, '/');
+
+      if (!p)
+	{
+	  fprintf (stderr, "Bad longname index\n");
+
+	  return FALSE;
+	}
+
+      if (p[1] != '\n')
+	{
+	  fprintf (stderr, "Malformed longname table\n");
+
+	  return FALSE;
+	}
+
+      len = p - longname;
+      MEMB_NAME_ALLOC (len + 1);
+      strncpy (arch->name, longname, len);
+      arch->name[len] = '\0';
+    }
+
+  /*
+   * 3. Otherwise, it's just a shortname.  If the shortname contains a
+   *    slash, then the name terminates before the slash; otherwise,
+   *    the name terminates at the first space, or at the end of the
+   *    field if there is none. */
+  else
+    {
+      const char *p;
+      size_t len;
+
+      p = strchr (buf, '/');
+
+      if (!p)
+	p = strchr (buf, ' ');
+
+      if (p)
+	len = p - buf;
+      else
+	len = sizeof (hdr->ar_name);
+
+      MEMB_NAME_ALLOC (len + 1);
+      strncpy (arch->name, buf, len);
+      arch->name[len] = 0;
+    }
+
+  /*
+   * 4. Parse the remaining fields of the header.  Return FALSE if any
+   *    are missing or ill-formed.
+   */
 #define FIELD(AFIELD, MFIELD, base)					\
 	if (!getNumber(hdr->AFIELD, base, sizeof(hdr->AFIELD), &ul))	\
 	{								\
@@ -737,52 +737,52 @@ canonicalize(Archive * arch, const struct ar_hdr * hdr)
 	}								\
 	arch->MFIELD = ul;
 
-	FIELD(ar_date, date, 10);
-	FIELD(ar_uid,  uid,  10);
-	FIELD(ar_gid,  gid,  10);
-	FIELD(ar_mode, mode,  8);
-	FIELD(ar_size, size, 10);
+  FIELD (ar_date, date, 10);
+  FIELD (ar_uid, uid, 10);
+  FIELD (ar_gid, gid, 10);
+  FIELD (ar_mode, mode, 8);
+  FIELD (ar_size, size, 10);
 #undef FIELD
 
-	/*
-	 * 4a. Decide whether a pad byte will be present.u
-	 *
-	 * The 4.4BSD format is really broken and needs a whole pile of
-	 * cruft to deal with it.  There are several cases:
-	 *
-	 * 1. Even namelen, even memberlen: no pad.
-	 * 2. Even namelen, odd memberlen: pad.  Just like SysV.
-	 * 3. Odd namelen, even memberlen: pad.  Cruft.
-	 * 4. Odd namelen, odd memberlen: no pad.  Cruft.
-	 *
-	 * Essentially, whenever the namelen is odd, the naive determination
-	 * of whether a pad is needed is reversed.
-	 */
-	if (!bsd_len)
-		arch->pad = (arch->size % 2) ? 1 : 0;
-	else
-	{
-		arch->size -= bsd_len;
-		arch->pad = (arch->size % 2) ? 1 : 0;
+  /*
+   * 4a. Decide whether a pad byte will be present.u
+   *
+   * The 4.4BSD format is really broken and needs a whole pile of
+   * cruft to deal with it.  There are several cases:
+   *
+   * 1. Even namelen, even memberlen: no pad.
+   * 2. Even namelen, odd memberlen: pad.  Just like SysV.
+   * 3. Odd namelen, even memberlen: pad.  Cruft.
+   * 4. Odd namelen, odd memberlen: no pad.  Cruft.
+   *
+   * Essentially, whenever the namelen is odd, the naive determination
+   * of whether a pad is needed is reversed.
+   */
+  if (!bsd_len)
+    arch->pad = (arch->size % 2) ? 1 : 0;
+  else
+    {
+      arch->size -= bsd_len;
+      arch->pad = (arch->size % 2) ? 1 : 0;
 
-		if (bsd_len % 2)
-			arch->pad = !arch->pad;
-	}
+      if (bsd_len % 2)
+	arch->pad = !arch->pad;
+    }
 
-	/*
-	 * 5. Everything was successful.
-	 */
-	return TRUE;
+  /*
+   * 5. Everything was successful.
+   */
+  return TRUE;
 
 
-	/*
-	 * 5a. Error exit -- free memory.
-	 */
+  /*
+   * 5a. Error exit -- free memory.
+   */
 free_and_out:
-	free(arch->name);
-	arch->name = 0;
+  free (arch->name);
+  arch->name = 0;
 
-	return FALSE;
+  return FALSE;
 }
 
 
@@ -792,20 +792,19 @@ free_and_out:
  * padding value is nonzero.  Returns TRUE on success.
  */
 static BOOL
-skipPadding(int fd, int pad)
+skipPadding (int fd, int pad)
 {
-	if (pad)
+  if (pad)
+    {
+      if (lseek (fd, 1, SEEK_CUR) == -1)
 	{
-		if (lseek(fd, 1, SEEK_CUR) == -1)
-		{
-			fprintf(stderr, "Can't skip pad byte: %s\n",
-				strerror(errno));
+	  fprintf (stderr, "Can't skip pad byte: %s\n", strerror (errno));
 
-			return FALSE;
-		}
+	  return FALSE;
 	}
+    }
 
-	return TRUE;
+  return TRUE;
 }
 
 
@@ -816,84 +815,82 @@ skipPadding(int fd, int pad)
  * readNormalMember call.  Returns TRUE on success.
  */
 static BOOL
-readSpecialMember(Archive * arch)
+readSpecialMember (Archive * arch)
 {
-	struct ar_hdr	hdr;
+  struct ar_hdr hdr;
 
-	/*
-	 * 1. Read a header H.  Fail if impossible.
-	 */
-	if (!readMember(arch, &hdr))
-		return FALSE;
+  /*
+   * 1. Read a header H.  Fail if impossible.
+   */
+  if (!readMember (arch, &hdr))
+    return FALSE;
 
-	/*
-	 * 2. If H is a symbol table, ditch it.
-	 * Fail if impossible.
-	 */
-	if ((strncmp(hdr.ar_name, "/ ", 2) == 0) ||
-		(strncmp(hdr.ar_name, "__.SYMTAB       ",
-			sizeof(hdr.ar_name)) == 0))
+  /*
+   * 2. If H is a symbol table, ditch it.
+   * Fail if impossible.
+   */
+  if ((strncmp (hdr.ar_name, "/ ", 2) == 0) ||
+      (strncmp (hdr.ar_name, "__.SYMTAB       ", sizeof (hdr.ar_name)) == 0))
+    {
+      if (!canonicalize (arch, &hdr))
+	return FALSE;
+
+      return skipMember (arch);
+    }
+
+  /*
+   * 3. If H is a SysV longname table, read it into ARCH.
+   */
+  if (strncmp (hdr.ar_name, "//", 2) == 0)
+    {
+      unsigned long len;
+      ssize_t cc;
+
+      if (!getNumber (hdr.ar_size, 10, sizeof (hdr.ar_size), &len))
 	{
-		if (!canonicalize(arch, &hdr))
-			return FALSE;
+	  fprintf (stderr, "Invalid name-table size\n");
 
-		return skipMember(arch);
+	  return FALSE;
 	}
 
-	/*
-	 * 3. If H is a SysV longname table, read it into ARCH.
-	 */
-	if (strncmp(hdr.ar_name, "//", 2) == 0)
+      arch->nameTable = malloc (len + 1);
+
+      if (!arch->nameTable)
 	{
-		unsigned long	len;
-		ssize_t		cc;
+	  fprintf (stderr, "Out of memory\n");
 
-		if (!getNumber(hdr.ar_size, 10, sizeof(hdr.ar_size), &len))
-		{
-			fprintf(stderr, "Invalid name-table size\n");
-
-			return FALSE;
-		}
-
-		arch->nameTable = malloc(len + 1);
-
-		if (!arch->nameTable)
-		{
-			fprintf(stderr, "Out of memory\n");
-
-			return FALSE;
-		}
-
-		cc = read(arch->fd, arch->nameTable, len);
-
-		if (cc == -1)
-		{
-			fprintf(stderr, "Error reading name-table: %s\n",
-				strerror(errno));
-
-			return FALSE;
-		}
-
-		if (cc != (ssize_t) len)
-		{
-			fprintf(stderr,
-				"Unexpected end of file in name-table\n");
-
-			return FALSE;
-		}
-
-		arch->nameTable[len] = 0;
-
-		return skipPadding(arch->fd, len % 2);
+	  return FALSE;
 	}
 
-	/*
-	 * 4. We read a normal header.
-	 * Canonicalize it, and mark it as needing rescanning.
-	 */
-	arch->rescan = TRUE;
+      cc = read (arch->fd, arch->nameTable, len);
 
-	return canonicalize(arch, &hdr);
+      if (cc == -1)
+	{
+	  fprintf (stderr, "Error reading name-table: %s\n",
+		   strerror (errno));
+
+	  return FALSE;
+	}
+
+      if (cc != (ssize_t) len)
+	{
+	  fprintf (stderr, "Unexpected end of file in name-table\n");
+
+	  return FALSE;
+	}
+
+      arch->nameTable[len] = 0;
+
+      return skipPadding (arch->fd, len % 2);
+    }
+
+  /*
+   * 4. We read a normal header.
+   * Canonicalize it, and mark it as needing rescanning.
+   */
+  arch->rescan = TRUE;
+
+  return canonicalize (arch, &hdr);
 }
 
 
@@ -905,28 +902,28 @@ readSpecialMember(Archive * arch)
  * file has been reached.
  */
 static BOOL
-readNormalMember(Archive * arch)
+readNormalMember (Archive * arch)
 {
-	struct ar_hdr	hdr;
+  struct ar_hdr hdr;
 
-	/*
-	 * If we are rereading an old header then just clear the
-	 * rescan flag and return success.
-	 */
-	if (arch->rescan)
-	{
-		arch->rescan = FALSE;
+  /*
+   * If we are rereading an old header then just clear the
+   * rescan flag and return success.
+   */
+  if (arch->rescan)
+    {
+      arch->rescan = FALSE;
 
-		return TRUE;
-	}
+      return TRUE;
+    }
 
-	/*
-	 * We need to read a new member header.
-	 */
-	if (!readMember(arch, &hdr))
-		return FALSE;
+  /*
+   * We need to read a new member header.
+   */
+  if (!readMember (arch, &hdr))
+    return FALSE;
 
-	return canonicalize(arch, &hdr);
+  return canonicalize (arch, &hdr);
 }
 
 
@@ -936,17 +933,17 @@ readNormalMember(Archive * arch)
  * Returns TRUE on success.
  */
 static BOOL
-skipMember(const Archive * arch)
+skipMember (const Archive * arch)
 {
-	if (lseek(arch->fd, arch->size, SEEK_CUR) == -1)
-	{
-		fprintf(stderr, "Can't skip past archive member: %s\n",
-			strerror(errno));
+  if (lseek (arch->fd, arch->size, SEEK_CUR) == -1)
+    {
+      fprintf (stderr, "Can't skip past archive member: %s\n",
+	       strerror (errno));
 
-		return FALSE;
-	}
+      return FALSE;
+    }
 
-	return skipPadding(arch->fd, arch->pad);
+  return skipPadding (arch->fd, arch->pad);
 }
 
 
@@ -955,48 +952,48 @@ skipMember(const Archive * arch)
  * open file.  Returns TRUE on success.
  */
 static BOOL
-writeFile(const Archive * arch, int outfd)
+writeFile (const Archive * arch, int outfd)
 {
-	char	buf[BUF_SIZE];
-	off_t	n;
+  char buf[BUF_SIZE];
+  off_t n;
 
-	n = arch->size;
+  n = arch->size;
 
-	while (n > 0)
+  while (n > 0)
+    {
+      ssize_t cc;
+
+      cc = read (arch->fd, buf, MIN (n, sizeof (buf)));
+
+      if (cc == -1)
 	{
-		ssize_t cc;
+	  fprintf (stderr, "Error reading archive member: %s\n",
+		   strerror (errno));
 
-		cc = read(arch->fd, buf, MIN(n, sizeof(buf)));
-
-		if (cc == -1)
-		{
-			fprintf(stderr, "Error reading archive member: %s\n",
-				strerror(errno));
-
-			return FALSE;
-		}
-
-		if (cc == 0)
-		{
-			fprintf(stderr, "Unexpected end of file\n");
-
-			return FALSE;
-		}
-
-		if (fullWrite(outfd, buf, cc) < 0)
-		{
-			fprintf(stderr, "Write error: %s\n", strerror(errno));
-
-			return FALSE;
-		}
-
-		n -= cc;
+	  return FALSE;
 	}
 
-	if (!skipPadding(arch->fd, arch->pad))
-		return FALSE;
+      if (cc == 0)
+	{
+	  fprintf (stderr, "Unexpected end of file\n");
 
-	return TRUE;
+	  return FALSE;
+	}
+
+      if (fullWrite (outfd, buf, cc) < 0)
+	{
+	  fprintf (stderr, "Write error: %s\n", strerror (errno));
+
+	  return FALSE;
+	}
+
+      n -= cc;
+    }
+
+  if (!skipPadding (arch->fd, arch->pad))
+    return FALSE;
+
+  return TRUE;
 }
 
 
@@ -1004,15 +1001,13 @@ writeFile(const Archive * arch, int outfd)
  * Print one line listing the information about the specified archive member.
  */
 static void
-listMember(const Archive * arch)
+listMember (const Archive * arch)
 {
-	printf("%s %6ld/%-6ld %8lu %s %s\n",
-	       modeString(arch->mode) + 1,
-	       (long) arch->uid,
-	       (long) arch->gid,
-	       (unsigned long) arch->size,
-	       timeString(arch->date),
-	       arch->name);
+  printf ("%s %6ld/%-6ld %8lu %s %s\n",
+	  modeString (arch->mode) + 1,
+	  (long) arch->uid,
+	  (long) arch->gid,
+	  (unsigned long) arch->size, timeString (arch->date), arch->name);
 }
 
 
