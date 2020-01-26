@@ -7,3 +7,7 @@ See https://unix.stackexchange.com/questions/564066/linux-on-acer-an517-51-72cq-
 Going thru a http://linuxfromscratch.org/ approach
 
 Use at your own risk. For Linux gurus only.
+
+You could copy the `my-linux-*-config` into your [kernel](https://kernel.org/) source tree.
+
+Then you want to edit the `build.zsh` script and run it.
