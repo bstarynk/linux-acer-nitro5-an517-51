@@ -1447,7 +1447,7 @@ do_where (int argc, const char **argv)
        */
       dirName = path;
 
-      if (dirName == '\0')
+      if (dirName == NULL)
 	dirName = ".";
 
       /*

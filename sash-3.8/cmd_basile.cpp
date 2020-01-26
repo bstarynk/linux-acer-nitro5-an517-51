@@ -44,12 +44,13 @@
 #include <map>
 #include <vector>
 #include <fstream>
+#include <iostream>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
-#include <curl.h>
+#include <curl/curl.h>
 
 extern "C" {
 #include "sash.h"
@@ -75,7 +76,7 @@ basile_prompt(void)
     }
     else {
         const char* pc = prompt;
-        const char* next = nullptr;
+        int ix=0;
         for (ix=0; ix>=0; ix++) {
             pc = curprompt.c_str()+ix;
             if (*pc == '\0')
@@ -92,17 +93,17 @@ basile_prompt(void)
                     const char*cwd = get_current_dir_name();
                     if (cwd) prstr += cwd;
                     else prstr += '?';
-                    free (cwd);
+                    free ((void*)cwd);
                 }
                 else if (percent[1] == 'T')
                 {
                     time_t nowt = time(nullptr);
                     struct tm nowtm;
                     char timbuf[80];
-                    memset(&tm, 0, sizeof(tm));
+                    memset((void*)&nowtm, 0, sizeof(nowtm));
                     memset(timbuf, 0, sizeof(timbuf));
                     localtime_r(&nowt, &nowtm);
-                    strftime(timbuf, sizeof(timbuf), "%H:%M:%S %Z", nowtm);
+                    strftime(timbuf, sizeof(timbuf), "%H:%M:%S %Z", &nowtm);
                     prstr += timbuf;
                 }
                 else if (percent[1] == 'D')
@@ -110,10 +111,10 @@ basile_prompt(void)
                     time_t nowt = time(nullptr);
                     struct tm nowtm;
                     char timbuf[80];
-                    memset(&tm, 0, sizeof(tm));
+                    memset(&nowtm, 0, sizeof(nowtm));
                     memset(timbuf, 0, sizeof(timbuf));
                     localtime_r(&nowt, &nowtm);
-                    strftime(timbuf, sizeof(timbuf), "%Y/%b/%d", nowtm);
+                    strftime(timbuf, sizeof(timbuf), "%Y/%b/%d", &nowtm);
                     prstr += timbuf;
                 }
                 else if (percent[1] == 't')
@@ -146,6 +147,6 @@ basile_prompt(void)
         }
     }
     if (!prstr.empty())
-        return prstr.c_str();
+        return (char*) prstr.c_str();
     else return nullptr;
 } // end basile_prompt

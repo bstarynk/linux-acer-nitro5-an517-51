@@ -30,7 +30,7 @@ MOUNT_TYPE		= '"ext4"'
 OPT = -O2 -g
 PACKAGES= readline libcurl
 
-CFLAGS = $(OPT) -Wall -Wmissing-prototypes \
+COMMONCFLAGS = $(OPT) -Wall  \
 	-DHAVE_GZIP=$(HAVE_GZIP) \
 	-DHAVE_LINUX_ATTR=$(HAVE_LINUX_ATTR) \
 	-DHAVE_LINUX_CHROOT=$(HAVE_LINUX_CHROOT) \
@@ -40,6 +40,9 @@ CFLAGS = $(OPT) -Wall -Wmissing-prototypes \
 	-DHAVE_BSD_MOUNT=$(HAVE_BSD_MOUNT) \
 	-DMOUNT_TYPE=$(MOUNT_TYPE) \
 	$(shell pkg-config --cflags $(PACKAGES))
+
+CFLAGS = $(COMMONCFLAGS) -Wmissing-prototypes
+CXXFLAGS = $(COMMONCFLAGS)
 
 CC= gcc
 CXX= g++
@@ -66,7 +69,7 @@ sash:	$(OBJS)
 	$(CXX) $(LDFLAGS) -o sash $(OBJS) $(LIBS)
 
 cmd_basile.o: cmd_basile.cpp
-	$(CXX) -c -I . -I /usr/include -I /usr/local/include $^ -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 clean:
 	rm -vf $(OBJS) sash *.orig

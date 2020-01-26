@@ -36,6 +36,7 @@
 #define	MAX_SOURCE	10
 #define	BUF_SIZE	8192
 
+extern char*prompt;
 
 #define	isBlank(ch)	(((ch) == ' ') || ((ch) == '\t'))
 #define	isDecimal(ch)	(((ch) >= '0') && ((ch) <= '9'))

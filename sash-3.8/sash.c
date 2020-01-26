@@ -351,7 +351,7 @@ static FILE *sourcefiles[MAX_SOURCE];
 static int sourceCount;
 
 static BOOL intCrlf = TRUE;
-static char *prompt;
+char *prompt;
 
 
 /*
@@ -1337,6 +1337,6 @@ sash_time (clockid_t id)
     return NAN;
   else
     return (double) ts.tv_sec + 1.0e-9 * ts.tv_nsec;
-} /* end sash_time */
+}				/* end sash_time */
 
 /* END CODE */
