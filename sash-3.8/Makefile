@@ -73,11 +73,11 @@ install: sash
 
 indent:
 	for f in *.c ; do \
-	  mv --backup $$f $$f.orig ; \
+	  cp --backup $$f $$f.orig ; \
 	  $(INDENT) $(INDENTFLAGS) $$f ; \
 	done
 	for f in  *.cpp ; do \
-	  mv --backup $$f $$f.orig ; \
+	  cp --backup $$f $$f.orig ; \
 	  $(ASTYLE) $(ASTYLEFLAGS) $$f ; \
 	done
 
