@@ -11,6 +11,9 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
+#include <readline.h>
+#include <math.h>
+#include <time.h>
 
 #include "sash.h"
 
@@ -559,8 +562,8 @@ readFile (const char *name)
   BOOL ttyFlag = 0;
 
   char *dynbuf = NULL;
-  size_t bufsiz = 0;
-  ssize_t buflen = 0;
+  ssize_t bufsiz = 0;
+  size_t buflen = 0;
 
   int r = 0;
 
@@ -621,12 +624,12 @@ readFile (const char *name)
       if (dynbuf[cc - 1] == '\n')
 	cc--;
 
-      while ((cc > 0) && isBlank (buf[cc - 1]))
+      while ((cc > 0) && isBlank (dynbuf[cc - 1]))
 	cc--;
 
       dynbuf[cc] = '\0';
 
-      r = command (buf);
+      r = command (dynbuf);
     }
 
   if (ferror (fp))
@@ -1333,7 +1336,7 @@ sash_time (clockid_t id)
   if (clock_gettime (id, &ts))
     return NAN;
   else
-    return (double) ts.tv_sec + 1.0e-9 * ts.rv_nsec;
-}
+    return (double) ts.tv_sec + 1.0e-9 * ts.tv_nsec;
+} /* end sash_time */
 
 /* END CODE */

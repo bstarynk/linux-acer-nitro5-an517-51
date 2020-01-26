@@ -28,6 +28,7 @@ HAVE_BSD_MOUNT		= 0
 MOUNT_TYPE		= '"ext4"'
 
 OPT = -O2 -g
+PACKAGES= readline libcurl
 
 CFLAGS = $(OPT) -Wall -Wmissing-prototypes \
 	-DHAVE_GZIP=$(HAVE_GZIP) \
@@ -37,10 +38,13 @@ CFLAGS = $(OPT) -Wall -Wmissing-prototypes \
 	-DHAVE_LINUX_PIVOT=$(HAVE_LINUX_PIVOT) \
 	-DHAVE_LINUX_MOUNT=$(HAVE_LINUX_MOUNT) \
 	-DHAVE_BSD_MOUNT=$(HAVE_BSD_MOUNT) \
-	-DMOUNT_TYPE=$(MOUNT_TYPE)
+	-DMOUNT_TYPE=$(MOUNT_TYPE) \
+	$(shell pkg-config --cflags $(PACKAGES))
 
+CC= gcc
+CXX= g++
 LDFLAGS = -static
-LIBS = -lreadline -lz -lcurl
+LIBS = -lreadline -lz -lcurl $(shell pkg-config --libs --static $(PACKAGES))
 INDENT= indent
 INDENTFLAGS= --gnu-style 
 ASTYLE= astyle

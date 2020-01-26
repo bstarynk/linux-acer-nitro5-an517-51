@@ -43,7 +43,7 @@
 
 #include <map>
 #include <vector>
-#include <ofstream>
+#include <fstream>
 
 #include <sys/types.h>
 #include <sys/stat.h>
