@@ -50,27 +50,29 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
-#include <curl/curl.h>
+#include <libssh/libssh.h>
 
 extern "C" {
 #include "sash.h"
 };
 
-int     do_curl(int argc, const char**argv) {
+int     do_ssh(int argc, const char**argv) {
 
-    std::clog << "unimplemented do_curl:";
+    std::clog << "unimplemented do_ssh:";
     for (int i=0; i<argc; i++)
         std::clog << ' ' << argv[i];
     std::clog << std::endl;
     return 2;
-} // end do_curl
+} // end do_ssh
 
 
 char*
 basile_prompt(void)
 {
     static std::string prstr;
-    std::string curprompt{prompt};
+    std::string curprompt;
+    if (prompt && prompt[0])
+      curprompt.assign(prompt);
     if (curprompt.empty()) {
         curprompt = std::string((getuid()==0)?"sash#":"sash>");
     }

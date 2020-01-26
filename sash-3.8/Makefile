@@ -28,7 +28,7 @@ HAVE_BSD_MOUNT		= 0
 MOUNT_TYPE		= '"ext4"'
 
 OPT = -O2 -g
-PACKAGES= readline libcurl
+PACKAGES= readline libssh
 
 COMMONCFLAGS = $(OPT) -Wall  \
 	-DHAVE_GZIP=$(HAVE_GZIP) \

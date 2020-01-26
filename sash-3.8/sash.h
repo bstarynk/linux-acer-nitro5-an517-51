@@ -104,7 +104,7 @@ extern	int	do_ed(int argc, const char ** argv);
 extern	int	do_where(int argc, const char ** argv);
 
 /// in cmd_basile.cpp
-extern  int     do_curl(int argc, const char**argv);
+extern  int     do_ssh(int argc, const char**argv);
 extern  char*   basile_prompt(void);
 
 #if	HAVE_GZIP

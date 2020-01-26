@@ -278,9 +278,9 @@ static const CommandEntry commandEntryTable[] = {
    "fileName ..."},
 
   {
-   "-curl", do_curl, 2, INFINITE_ARGS,
-   "HTTP and FTP client with libcurl",
-   "URL ..."},
+   "-ssh", do_ssh, 2, 1,
+   "builtin ssh client",
+   "username@host"},
 
   {
    "-sync", do_sync, 1, 1,
