@@ -618,6 +618,8 @@ readFile (const char *name)
 	  return 1;
 	}
 
+      if (!dynbuf)
+	break;
 
       cc = strlen (dynbuf);
 

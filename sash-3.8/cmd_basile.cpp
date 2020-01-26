@@ -72,11 +72,11 @@ basile_prompt(void)
     static std::string prstr;
     std::string curprompt;
     if (prompt && prompt[0])
-      curprompt.assign(prompt);
-    if (curprompt.empty()) {
-        curprompt = std::string((getuid()==0)?"sash#":"sash>");
-    }
+        curprompt.assign(prompt);
     else {
+        prstr.assign((getuid()==0)?"sash#":"sash>");
+    };
+    if (prompt) {
         const char* pc = prompt;
         int ix=0;
         for (ix=0; ix>=0; ix++) {
